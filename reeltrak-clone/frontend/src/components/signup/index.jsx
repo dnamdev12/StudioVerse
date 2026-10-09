@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import AuthLayout from "../auth/AuthLayout";
-import PhoneInput from "../auth/PhoneInput";
+import PhoneInput, { COUNTRIES } from "../auth/PhoneInput";
+import { signupUser } from "../../api";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -12,6 +13,7 @@ const validate = (form) => {
   if (form.lastName.trim().length < 2) errors.lastName = "Last name must be at least 2 characters";
   if (!EMAIL_RE.test(form.email.trim())) errors.email = "Enter a valid email address";
   if (form.mobile.length < 7) errors.mobile = "Enter a valid mobile number";
+  if (form.password.length < 6) errors.password = "Password must be at least 6 characters";
   return errors;
 };
 
@@ -22,22 +24,41 @@ const Signup = () => {
     email: "",
     country: "US",
     mobile: "",
+    password: "",
   });
   const [agreed, setAgreed] = useState(false);
   const [touched, setTouched] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
 
   const errors = validate(form);
-  const canSubmit = agreed && Object.keys(errors).length === 0;
+  const canSubmit = agreed && !submitting && Object.keys(errors).length === 0;
 
   const set = (name) => (value) => setForm((f) => ({ ...f, [name]: value }));
   const blur = (name) => () => setTouched((t) => ({ ...t, [name]: true }));
   const errorFor = (name) => (touched[name] ? errors[name] : undefined);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!canSubmit) return;
-    // TODO: send `form` to the backend signup endpoint.
-    toast.success("Details look good!");
+
+    const dial = COUNTRIES.find((c) => c.code === form.country).dial;
+    setSubmitting(true);
+    try {
+      const data = await signupUser({
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
+        mobile: `${dial}${form.mobile}`,
+        password: form.password,
+      });
+      toast.success(data.message || "Account created");
+      navigate("/login");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const textField = (name, label, placeholder, type = "text") => (
@@ -84,6 +105,8 @@ const Signup = () => {
             {errorFor("mobile") && <span className="auth-error">{errorFor("mobile")}</span>}
           </div>
 
+          {textField("password", "Password", "Create a password", "password")}
+
           <label className="auth-check">
             <input
               type="checkbox"
@@ -97,7 +120,7 @@ const Signup = () => {
           </label>
 
           <button type="submit" className="auth-submit" disabled={!canSubmit}>
-            Next
+            {submitting ? "Creating account..." : "Next"}
           </button>
         </form>
 
